@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "industrial-energy-baseline"
-version = "0.1.0"
+version = "2.0.0"
 description = "Herramienta open source para establecer, mantener, evaluar y auditar líneas base energéticas industriales."
 readme = "README.md"
 authors = [

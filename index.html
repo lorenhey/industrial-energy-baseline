@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>industrial-energy-baseline | Línea Base Energética, CUSUM & M&V (ISO 50006 / IPMVP)</title>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- KaTeX for Mathematics -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top Header Bar -->
+  <header class="top-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-logo-icon">
+          <i class="fa-solid fa-chart-line"></i>
+        </div>
+        <div class="brand-title-wrap">
+          <h1>industrial-energy-baseline <span class="brand-badge">ISO 50006 / IPMVP</span></h1>
+          <p class="brand-subtitle">Separación de cambios reales de desempeño energético vs variables operativas y climáticas</p>
+        </div>
+      </div>
+
+      <div class="top-controls">
+        <div class="control-group">
+          <label class="control-label" for="datasetSelect">Caso Industrial:</label>
+          <select id="datasetSelect" class="dataset-select">
+            <option value="boxmark_leather">Curtido y Acabado Automotriz (Boxmark Industrial)</option>
+            <option value="air_compressors">Central de Compresores de Aire Comprimido</option>
+            <option value="hvac_chiller">Central de Agua Helada y Climatización HVAC</option>
+            <option value="steam_boiler">Caldera Acuotubular de Vapor Industrial</option>
+          </select>
+        </div>
+
+        <button id="btnExportReport" class="btn-header btn-export">
+          <i class="fa-solid fa-file-arrow-down"></i> Exportar Informe JSON
+        </button>
+
+        <a href="https://github.com/lorenhey/industrial-energy-baseline" target="_blank" class="btn-header">
+          <i class="fa-brands fa-github"></i> Repositorio
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tabs Navigation Bar -->
+  <nav class="nav-tabs-wrapper">
+    <div class="nav-tabs-list">
+      <button class="nav-tab-btn active" data-tab="tab-auditor">
+        <i class="fa-solid fa-gauge-high"></i> Auditor de Línea Base
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-cusum">
+        <i class="fa-solid fa-arrow-trend-up"></i> Monitoreo CUSUM y M&amp;V
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-enpi">
+        <i class="fa-solid fa-bolt"></i> Indicadores EnPI &amp; Basal
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-catalog">
+        <i class="fa-solid fa-industry"></i> Catálogo de Casos
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-editor">
+        <i class="fa-solid fa-table"></i> Editor de Datos &amp; CSV
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-cli">
+        <i class="fa-solid fa-terminal"></i> Terminal CLI <code>ieb</code>
+      </button>
+      <button class="nav-tab-btn" data-tab="tab-theory">
+        <i class="fa-solid fa-book-bookmark"></i> Tratado ISO 50006
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="app-main">
+
+    <!-- Active Dataset Context Banner -->
+    <section class="active-case-banner">
+      <div class="active-case-info">
+        <h2 id="activeDatasetTitle">Planta de Curtido y Acabado de Cuero Automotriz (Boxmark Industrial)</h2>
+        <p id="activeDatasetDesc">Monitoreo mensual de 24 períodos de consumo de gas natural en calderas de vapor vs producción de cuero terminado y variables climáticas.</p>
+        <div class="intervention-highlight">
+          <i class="fa-solid fa-wrench"></i> <span id="activeDatasetIntervention">Intervención en mes 13: Aislamiento térmico de ramales de vapor y control modulante de quemadores.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Model Tuning Bar -->
+    <section class="model-tuning-bar">
+      <div class="drivers-selection-group">
+        <span class="drivers-label">Variables Explicativas (Drivers):</span>
+        <div id="driversContainer" class="drivers-container">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="split-slider-group">
+        <span class="drivers-label">Corte Línea Base / Reporte:</span>
+        <input type="range" id="baselineSplitSlider" class="range-slider" min="4" max="20" value="12">
+        <span id="baselineSplitLabel">12 períodos</span>
+      </div>
+    </section>
+
+    <!-- Status Banner -->
+    <div id="modelStatusBanner" class="status-banner valid">
+      <i class="fa-solid fa-circle-check"></i>
+      <span>Línea base estadísticamente válida y alineada a los requerimientos de la norma ISO 50006 y ASHRAE Guideline 14.</span>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 1: AUDITOR DE LÍNEA BASE (ISO 50006)                          -->
+    <!-- ================================================================= -->
+    <div id="tab-auditor" class="tab-pane active">
+
+      <!-- KPI Cards Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Coeficiente R²</span>
+            <i class="fa-solid fa-percent"></i>
+          </div>
+          <div id="kpiR2" class="kpi-val cyan">0.962</div>
+          <div class="kpi-meta">
+            <span>Bondad de ajuste</span>
+            <span id="badgeR2" class="compliance-badge pass">≥ 0.75 (Alineado)</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>R² Ajustado</span>
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div id="kpiAdjR2" class="kpi-val">0.951</div>
+          <div class="kpi-meta">
+            <span>Penaliza sobrerregulación</span>
+            <span>n - p - 1</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>CV(RMSE)</span>
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+          <div id="kpiCvRmse" class="kpi-val">4.8%</div>
+          <div class="kpi-meta">
+            <span>Coef. Variación</span>
+            <span id="badgeCvRmse" class="compliance-badge pass">≤ 15% (ASHRAE 14)</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>NMBE (Sesgo)</span>
+            <i class="fa-solid fa-scale-balanced"></i>
+          </div>
+          <div id="kpiNmbe" class="kpi-val">0.00%</div>
+          <div class="kpi-meta">
+            <span>Error medio normalizado</span>
+            <span id="badgeNmbe" class="compliance-badge pass">≤ ±0.5% (ASHRAE 14)</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>F-Statistic</span>
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div id="kpiFstat" class="kpi-val">94.3</div>
+          <div class="kpi-meta">
+            <span>Significancia global</span>
+            <span class="compliance-badge pass">p &lt; 0.0001</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>RMSE (Error Típico)</span>
+            <i class="fa-solid fa-wave-square"></i>
+          </div>
+          <div id="kpiRmse" class="kpi-val">2.280 m³</div>
+          <div class="kpi-meta">
+            <span>Desvío estándar residuos</span>
+            <span>s_e = √(SSE/df)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title"><i class="fa-solid fa-chart-area"></i> Regresión y Banda de Predicción (95% CI)</div>
+              <div class="chart-subtitle">Dispersión de consumo vs Driver primario con intervalo de confianza al 95%</div>
+            </div>
+            <button id="btnCopyEquation" class="btn-header" title="Copiar ecuación matemática de la línea base">
+              <i class="fa-regular fa-copy"></i> Copiar Ecuación
+            </button>
+          </div>
+          <div id="chartScatter"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title"><i class="fa-solid fa-chart-simple"></i> Análisis de Residuos Tipificados</div>
+              <div class="chart-subtitle">Detección de heterocedasticidad, autocorrelación o anomalías (límites a ±2σ)</div>
+            </div>
+          </div>
+          <div id="chartResiduals"></div>
+        </div>
+      </div>
+
+      <!-- Regression Coefficients Table -->
+      <div class="table-card">
+        <div class="chart-header">
+          <div class="chart-title"><i class="fa-solid fa-table-list"></i> Coeficientes del Modelo de Regresión (MCO)</div>
+          <div class="chart-subtitle">Pruebas t de Student para significancia individual de cada driver explicativo</div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Variable Explicativa / Término</th>
+              <th class="num">Coeficiente (β)</th>
+              <th class="num">Error Estándar (SE)</th>
+              <th class="num">Estadístico t</th>
+              <th class="num">p-value</th>
+              <th>Significancia (α = 0.05)</th>
+            </tr>
+          </thead>
+          <tbody id="coefficientsTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 2: MONITOREO CUSUM Y AHORROS M&V                              -->
+    <!-- ================================================================= -->
+    <div id="tab-cusum" class="tab-pane">
+
+      <!-- Savings KPI Cards Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card savings">
+          <div class="kpi-title">
+            <span>Ahorro Neto Total</span>
+            <i class="fa-solid fa-leaf"></i>
+          </div>
+          <div id="kpiTotalSavings" class="kpi-val savings">+58.400 m³</div>
+          <div class="kpi-meta">
+            <span>Período de Reporte</span>
+            <span class="compliance-badge pass">Ahorro Real</span>
+          </div>
+        </div>
+
+        <div class="kpi-card savings">
+          <div class="kpi-title">
+            <span>Ahorro Porcentual</span>
+            <i class="fa-solid fa-percent"></i>
+          </div>
+          <div id="kpiPctSavings" class="kpi-val savings">+10.8%</div>
+          <div class="kpi-meta">
+            <span>Respecto al modelo ajustado</span>
+            <span>ΔE / E_esperado</span>
+          </div>
+        </div>
+
+        <div class="kpi-card warning">
+          <div class="kpi-title">
+            <span>Incertidumbre M&amp;V (95%)</span>
+            <i class="fa-solid fa-circle-question"></i>
+          </div>
+          <div id="kpiUncertainty" class="kpi-val">±12.400 m³ (±2.3%)</div>
+          <div class="kpi-meta">
+            <span>Criterio ASHRAE 14 / IPMVP</span>
+            <span class="compliance-badge pass">Significativo</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>CUSUM Final Acumulado</span>
+            <i class="fa-solid fa-arrow-trend-up"></i>
+          </div>
+          <div id="kpiCusumFinal" class="kpi-val cyan">+58.400 m³</div>
+          <div class="kpi-meta">
+            <span>Suma acumulada de ahorros</span>
+            <span>Tendencia persistente</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Consumo Esperado (Modelo)</span>
+            <i class="fa-solid fa-calculator"></i>
+          </div>
+          <div id="kpiExpectedRep" class="kpi-val">542.100 m³</div>
+          <div class="kpi-meta">
+            <span>Proyección con drivers reales</span>
+            <span>Ajuste dinámico</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>Consumo Real Registrado</span>
+            <i class="fa-solid fa-gauge"></i>
+          </div>
+          <div id="kpiActualRep" class="kpi-val">483.700 m³</div>
+          <div class="kpi-meta">
+            <span>Medición en medidores</span>
+            <span>Facturado</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Series Chart -->
+      <div class="chart-card full-width" style="margin-bottom: 1.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="fa-solid fa-chart-line"></i> Evolución Temporal: Consumo Real vs Línea Base Ajustada</div>
+            <div class="chart-subtitle">El área verde resalta el ahorro de energía en el período de reporte tras la implementación de medidas</div>
+          </div>
+        </div>
+        <div id="chartTimeSeries"></div>
+      </div>
+
+      <!-- CUSUM Chart -->
+      <div class="chart-card full-width" style="margin-bottom: 1.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title"><i class="fa-solid fa-bezier-curve"></i> Curva CUSUM: Suma Acumulada de Diferencias</div>
+            <div class="chart-subtitle">Detecta quiebres estructurales en el proceso: una pendiente positiva ascendente confirma ahorros sostenidos</div>
+          </div>
+        </div>
+        <div id="chartCusum"></div>
+      </div>
+
+      <!-- Detailed Monthly Audit Table -->
+      <div class="table-card">
+        <div class="chart-header">
+          <div class="chart-title"><i class="fa-solid fa-list-check"></i> Matriz de Auditoría y Verificación Período a Período</div>
+          <div class="chart-subtitle">Comparación de consumo observado vs modelo proyectado, cálculo de ahorro y CUSUM</div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Período</th>
+              <th>Régimen</th>
+              <th class="num">Consumo Real</th>
+              <th class="num">Consumo Esperado</th>
+              <th class="num">Ahorro Mensual</th>
+              <th class="num">% Ahorro</th>
+              <th class="num">CUSUM Acum.</th>
+              <th class="num">Residuo (σ)</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 3: INDICADORES ENPI & BASAL                                   -->
+    <!-- ================================================================= -->
+    <div id="tab-enpi" class="tab-pane">
+
+      <div class="charts-grid">
+        <!-- Baseload Analysis Card -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title"><i class="fa-solid fa-cubes-stacked"></i> Descomposición de Consumo Basal e Intercepto</div>
+              <div class="chart-subtitle">Energía fija requerida independientemente del nivel productivo (fugas, calefacción, pérdidas)</div>
+            </div>
+          </div>
+
+          <div style="padding: 1rem 0;">
+            <div class="kpi-val cyan" id="kpiBaseloadVal">12.500 m³/período</div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+              Representa el <strong><span id="kpiBaseloadPct">28.4%</span></strong> del consumo energético total en régimen de línea base.
+            </p>
+
+            <div class="callout-box" style="margin-top: 1.5rem;">
+              <strong><i class="fa-solid fa-circle-info"></i> Importancia del Consumo Basal en Ingeniería:</strong><br>
+              En plantas manufactureras como Boxmark, el término independiente ($\beta_0$) refleja las pérdidas térmicas en cañerías no aisladas, pérdidas de radiación en calderas mantenidas en caliente durante fines de semana, y fugas basales de aire comprimido. Reducir el intercepto es la forma más rentable de ahorro sin depender de la demanda de clientes.
+            </div>
+          </div>
+        </div>
+
+        <!-- Normalized EnPI Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title"><i class="fa-solid fa-gauge"></i> Indicador de Desempeño Energético Normalizado (EnPI)</div>
+              <div class="chart-subtitle">Relación Consumo Real / Consumo Esperado ($E_{real} / E_{modelo}$). Valores &lt; 1.00 indican mayor eficiencia.</div>
+            </div>
+          </div>
+          <div id="chartEnpi"></div>
+        </div>
+      </div>
+
+      <!-- Theoretical Foundation of EnPIs -->
+      <div class="table-card">
+        <div class="chart-header">
+          <div class="chart-title"><i class="fa-solid fa-lightbulb"></i> ¿Por qué el Consumo Específico ($SEC = E/P$) Engaña a la Gerencia?</div>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.92rem; line-height: 1.6; margin-bottom: 1rem;">
+          En muchas fábricas se comete el grave error de evaluar la eficiencia energética dividiendo directamente el consumo de energía por las unidades producidas:
+          $$SEC = \frac{\text{Energía total}}{\text{Producción}}$$
+          Debido a la existencia del consumo basal fijo ($\beta_0$), cuando la producción de la planta aumenta, el $SEC$ <em>parece</em> mejorar automáticamente, y cuando la producción baja, el $SEC$ empeora drásticamente, sin que los operarios ni los equipos hayan cambiado un solo parámetro de eficiencia.
+        </p>
+        <div class="callout-box">
+          <strong>La solución ISO 50006:</strong> Utilizar un <strong>EnPI Ajustado por Regresión</strong> ($E_{real} / \hat{E}_{baseline}$), que descuenta matemáticamente el efecto del volumen de producción, de la temperatura exterior y de las horas trabajadas.
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 4: CATÁLOGO DE CASOS INDUSTRIALES                             -->
+    <!-- ================================================================= -->
+    <div id="tab-catalog" class="tab-pane">
+
+      <div class="cases-catalog-grid">
+
+        <!-- Case 1: Boxmark Leather -->
+        <div class="case-card">
+          <div>
+            <span class="case-meta-tag">Industria Automotriz</span>
+            <h3>Curtido y Acabado de Cuero</h3>
+            <p>Planta con calderas de vapor a gas natural para túneles de secado continuo, prensas de grabado térmico y climatización de naves.</p>
+            <ul class="case-specs-list">
+              <li><strong>Energía objetivo:</strong> Gas Natural [m³]</li>
+              <li><strong>Driver principal:</strong> Producción de cuero [m²]</li>
+              <li><strong>Driver climático:</strong> Grados Día Calefacción [HDD 18°C]</li>
+              <li><strong>Driver operativo:</strong> Horas operativas de caldera [h]</li>
+              <li><strong>Intervención:</strong> Aislamiento de cañerías y quemadores modulantes</li>
+            </ul>
+          </div>
+          <button class="btn-load-case" data-case="boxmark_leather">
+            <i class="fa-solid fa-play"></i> Cargar y Auditar Caso
+          </button>
+        </div>
+
+        <!-- Case 2: Compressors -->
+        <div class="case-card">
+          <div>
+            <span class="case-meta-tag">Servicios Centrales</span>
+            <h3>Central de Aire Comprimido</h3>
+            <p>Batería de 3 compresores de tornillo rotativo de 75 kW y 90 kW que abastecen la red neumática de corte, prensas y pistolas de soplado.</p>
+            <ul class="case-specs-list">
+              <li><strong>Energía objetivo:</strong> Electricidad de compresores [kWh]</li>
+              <li><strong>Driver principal:</strong> Volumen de aire suministrado [Nm³]</li>
+              <li><strong>Driver operativo:</strong> Horas de compresor en carga [h]</li>
+              <li><strong>Variable de control:</strong> Presión media en colector [bar]</li>
+              <li><strong>Intervención:</strong> Detección de fugas ultrasónicas y baja de presión</li>
+            </ul>
+          </div>
+          <button class="btn-load-case" data-case="air_compressors">
+            <i class="fa-solid fa-play"></i> Cargar y Auditar Caso
+          </button>
+        </div>
+
+        <!-- Case 3: HVAC Chiller -->
+        <div class="case-card">
+          <div>
+            <span class="case-meta-tag">Climatización de Naves</span>
+            <h3>Central de Agua Helada (Chillers)</h3>
+            <p>2 chillers centrífugos de 400 TR con torres de enfriamiento y bombeo de agua helada hacia unidades de tratamiento de aire (UTA).</p>
+            <ul class="case-specs-list">
+              <li><strong>Energía objetivo:</strong> Electricidad chillers y bombas [kWh]</li>
+              <li><strong>Driver climático:</strong> Grados Día Refrigeración [CDD 22°C]</li>
+              <li><strong>Driver de proceso:</strong> Caudal de agua helada circulada [m³]</li>
+              <li><strong>Driver operativo:</strong> Horas de ocupación de planta [h]</li>
+              <li><strong>Intervención:</strong> Condensación flotante y variadores de frecuencia</li>
+            </ul>
+          </div>
+          <button class="btn-load-case" data-case="hvac_chiller">
+            <i class="fa-solid fa-play"></i> Cargar y Auditar Caso
+          </button>
+        </div>
+
+        <!-- Case 4: Steam Boiler -->
+        <div class="case-card">
+          <div>
+            <span class="case-meta-tag">Generación Térmica</span>
+            <h3>Caldera Acuotubular de Vapor</h3>
+            <p>Generador de vapor saturado a 10 bar de 12 ton/h alimentado a gas natural con desaireador y purga continua de sales.</p>
+            <ul class="case-specs-list">
+              <li><strong>Energía objetivo:</strong> Consumo de gas combustible [m³]</li>
+              <li><strong>Driver principal:</strong> Generación de vapor [ton]</li>
+              <li><strong>Driver térmico:</strong> Temp. agua de alimentación [°C]</li>
+              <li><strong>Driver de pérdida:</strong> Tasa de purga continua [%]</li>
+              <li><strong>Intervención:</strong> Montaje de economizador de humos en chimenea</li>
+            </ul>
+          </div>
+          <button class="btn-load-case" data-case="steam_boiler">
+            <i class="fa-solid fa-play"></i> Cargar y Auditar Caso
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 5: EDITOR DE DATOS & SUBIDA CSV                               -->
+    <!-- ================================================================= -->
+    <div id="tab-editor" class="tab-pane">
+
+      <div class="table-card">
+        <div class="chart-header">
+          <div class="chart-title"><i class="fa-solid fa-file-csv"></i> Pegar Dataset Personalizado en Formato CSV</div>
+          <button id="btnResetDataset" class="btn-header">
+            <i class="fa-solid fa-rotate-left"></i> Restaurar Dataset Original
+          </button>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.85rem;">
+          Pegá los datos separados por coma o punto y coma. La primera columna debe ser la Fecha o Período, la segunda columna el Consumo de Energía, y las columnas siguientes los Drivers independientes.
+        </p>
+        <textarea id="customCsvTextarea" class="csv-textarea" placeholder="periodo,consumo_kwh,produccion_unidades,temperatura_media
+2024-01,45200,12000,24.5
+2024-02,43100,11500,23.8
+2024-03,48900,13200,21.2
+..."></textarea>
+        <div class="editor-controls">
+          <button id="btnParseCsv" class="btn-header btn-export">
+            <i class="fa-solid fa-gear"></i> Parsear y Crear Línea Base
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="chart-header">
+          <div class="chart-title"><i class="fa-solid fa-pen-to-square"></i> Editor de Celdas Interactivo</div>
+          <div class="chart-subtitle">Editá valores directamente para evaluar el impacto en vivo sobre el modelo y el CUSUM</div>
+        </div>
+        <div id="tableEditorWrapper">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 6: SIMULADOR TERMINAL CLI `ieb`                               -->
+    <!-- ================================================================= -->
+    <div id="tab-cli" class="tab-pane">
+
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="terminal-dot red"></div>
+            <div class="terminal-dot yellow"></div>
+            <div class="terminal-dot green"></div>
+          </div>
+          <div class="terminal-title">ieb - industrial_energy_baseline CLI emulator</div>
+          <div style="font-size: 0.75rem; color: var(--text-dim); font-family: var(--font-mono);">Python 3.10 / Rich</div>
+        </div>
+
+        <div id="cliOutput" class="terminal-output">
+          <div class="cli-info">Industrial Energy Baseline CLI (v2.0.0)</div>
+          <div class="cli-dim">Módulo de modelado y auditoría de líneas base según ISO 50001, ISO 50006 e IPMVP.</div>
+          <div class="cli-dim">Escribí <span class="cli-cmd">help</span> para consultar los comandos disponibles.</div>
+          <br>
+        </div>
+
+        <div class="terminal-input-bar">
+          <span class="terminal-prompt">ieb:~$</span>
+          <input type="text" id="cliInput" class="terminal-input" placeholder="Escribí un comando, ej: ieb baseline inspect, ieb savings, ieb cusum..." autofocus>
+        </div>
+      </div>
+
+      <div class="callout-box">
+        <strong><i class="fa-solid fa-terminal"></i> Integración con el paquete de Python:</strong><br>
+        Esta interfaz web reproduce fielmente el comportamiento de la CLI oficial del paquete <code>industrial-energy-baseline</code>. En tu entorno local de terminal podés correr <code>pip install industrial-energy-baseline</code> y ejecutar <code>ieb baseline create config.yaml</code> para auditar tus propios archivos en planta.
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TAB 7: TRATADO ISO 50006 & FUNDAMENTOS MATEMÁTICOS                -->
+    <!-- ================================================================= -->
+    <div id="tab-theory" class="tab-pane">
+
+      <article class="theory-content">
+        <h2>1. El Problema Fundamental de la Eficiencia Energética Industrial</h2>
+        <p>
+          En la industria manufacturera y de procesos, el consumo absoluto de energía de una planta rara vez se mantiene constante. Si una planta automotriz como Boxmark Leather produce 50.000 m² de cuero en un mes y al mes siguiente produce 35.000 m², el consumo de gas natural de las calderas y de electricidad de las líneas va a descender inevitablemente.
+        </p>
+        <p>
+          Sin embargo, <strong>menor consumo absoluto no significa mayor eficiencia energética</strong>. Si la dirección de planta no normaliza el consumo aislando las variables operativas y climáticas, es imposible determinar si una inversión en eficiencia (como la aislación de líneas de vapor o la recuperación de condensados) realmente ahorró energía o si la reducción de factura se debió simplemente a una caída en el volumen de pedidos de los clientes.
+        </p>
+
+        <h2>2. Modelo Matemático de Regresión Multivariable (OLS)</h2>
+        <p>
+          Siguiendo las directrices de la norma <strong>ISO 50006:2014</strong> y el <strong>Protocolo Internacional de Medición y Verificación del Desempeño (IPMVP Opción C)</strong>, la línea base energética ($EnB$) se formula mediante una regresión lineal múltiple por Mínimos Cuadrados Ordinarios (MCO):
+        </p>
+
+        <div class="math-card">
+          $$\hat{E}_i = \beta_0 + \sum_{j=1}^{p} \beta_j X_{ij} + \varepsilon_i$$
+        </div>
+
+        <p>Donde:</p>
+        <ul>
+          <li>$\hat{E}_i$: Consumo energético modelado para el período $i$ [m³, kWh, MJ].</li>
+          <li>$\beta_0$: Consumo basal o intercepto independiente de la producción (pérdidas fijas, fugas de aire, calentamiento de tuberías, iluminación).</li>
+          <li>$X_{ij}$: Variable relevante o <em>driver</em> independiente $j$ en el período $i$ (producción de cuero $m^2$, Grados Día de Calefacción $HDD$, horas de marcha).</li>
+          <li>$\beta_j$: Coeficiente de consumo marginal por cada unidad adicional del driver $j$.</li>
+          <li>$\varepsilon_i$: Error residual aleatorio, con hipótesis de normalidad $\varepsilon_i \sim \mathcal{N}(0, \sigma^2)$.</li>
+        </ul>
+
+        <p>
+          La estimación vectorial de los parámetros $\boldsymbol{\beta} = [\beta_0, \beta_1, \dots, \beta_p]^T$ se obtiene de forma matricial exacta:
+        </p>
+
+        <div class="math-card">
+          $$\boldsymbol{\beta} = (\mathbf{X}^T \mathbf{X})^{-1} \mathbf{X}^T \mathbf{y}$$
+        </div>
+
+        <h2>3. Criterios de Validación Normativa (ASHRAE Guideline 14 &amp; ISO 50006)</h2>
+        <p>
+          Para que una línea base sea legalmente auditable y admisible ante certificadoras ISO 50001, debe satisfacer los siguientes umbrales estadísticos mínimos:
+        </p>
+
+        <div class="table-card" style="margin: 1.5rem 0;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Métrica Estadística</th>
+                <th>Definición Matemática</th>
+                <th>Umbral Mensual (ASHRAE 14)</th>
+                <th>Interpretación en Planta</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Coeficiente $R^2$</strong></td>
+                <td>$$R^2 = 1 - \frac{\sum (y_i - \hat{y}_i)^2}{\sum (y_i - \bar{y})^2}$$</td>
+                <td>$$\ge 0.75$$</td>
+                <td>Indica que al menos el 75% de la variabilidad del consumo queda explicada por los drivers elegidos.</td>
+              </tr>
+              <tr>
+                <td><strong>CV(RMSE)</strong></td>
+                <td>$$CV(RMSE) = \frac{\sqrt{\frac{1}{n-p-1} \sum (y_i - \hat{y}_i)^2}}{\bar{y}} \times 100\%$$</td>
+                <td>$$\le 15.0\%$$</td>
+                <td>Coeficiente de variación del error cuadrático medio relativo a la media. Evalúa la dispersión residual del modelo.</td>
+              </tr>
+              <tr>
+                <td><strong>NMBE (Sesgo)</strong></td>
+                <td>$$NMBE = \frac{\sum (y_i - \hat{y}_i)}{(n - p - 1) \bar{y}} \times 100\%$$</td>
+                <td>$$\le \pm 0.50\%$$</td>
+                <td>Error de sesgo medio normalizado. Garantiza que el modelo no sobrestime ni subestime sistemáticamente la energía.</td>
+              </tr>
+              <tr>
+                <td><strong>Significancia $t$ ($p$-value)</strong></td>
+                <td>$$t_j = \frac{\beta_j}{SE(\beta_j)}, \quad p < 0.05$$</td>
+                <td>$$p < 0.05 \quad (|t| > 2)$$</td>
+                <td>Cada variable explicativa debe ser estadísticamente significativa con un 95% de confianza.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>4. Medición y Verificación (M&amp;V) y Metodología CUSUM</h2>
+        <p>
+          Una vez validada la línea base con los datos históricos previos a la intervención (período de línea base), se evalúa el <strong>período de reporte</strong>.
+        </p>
+        <p>
+          Para cada período futuro $k$, se calculan los ahorros netos restando el consumo real registrado del consumo que el modelo predice habiendo ajustado por las condiciones reales de ese período:
+        </p>
+
+        <div class="math-card">
+          $$\Delta E_k = \hat{E}_{baseline, k}(X_{real, k}) - E_{real, k}$$
+        </div>
+
+        <p>
+          La <strong>Suma Acumulada de Diferencias (CUSUM)</strong> es la métrica de oro para el monitoreo continuo en gestión energética:
+        </p>
+
+        <div class="math-card">
+          $$S_m = \sum_{k=1}^{m} \Delta E_k = \sum_{k=1}^{m} \left( \hat{E}_{baseline, k} - E_{real, k} \right)$$
+        </div>
+
+        <div class="callout-box">
+          <strong>Propiedades de la Curva CUSUM:</strong>
+          <ul>
+            <li><strong>Pendiente = 0 (Horizontal):</strong> La planta opera exactamente al mismo nivel de eficiencia que en el período de línea base.</li>
+            <li><strong>Pendiente &gt; 0 (Ascendente):</strong> Se están logrando ahorros reales de energía de forma continua. La inclinación de la recta representa la tasa mensual de ahorro.</li>
+            <li><strong>Pendiente &lt; 0 (Descendente):</strong> Existe degradación en los equipos (ej. suciedad en intercambiadores, fugas de vapor, descalibración de lazos de control).</li>
+            <li><strong>Puntos de Inflexión:</strong> Indican la fecha exacta en que una medida de mejora o un fallo operativo empezó a surtir efecto en la planta.</li>
+          </ul>
+        </div>
+
+        <h2>5. Cálculo de Incertidumbre en Ahorros al 95% de Confianza</h2>
+        <p>
+          Debido a la dispersión estadística natural del modelo de línea base, los ahorros cuantificados tienen un margen de incertidumbre. Según el estándar ASHRAE Guideline 14 e IPMVP, la incertidumbre total $U_{95\%}$ para un período de reporte de $m$ meses evaluado contra una línea base de $n$ meses es:
+        </p>
+
+        <div class="math-card">
+          $$U_{95\%} = t_{\alpha/2, \nu} \cdot RMSE \cdot \sqrt{m \left( 1 + \frac{m}{n} \right)}$$
+        </div>
+
+        <p>
+          Si el ahorro total acumulado supera con holgura a $U_{95\%}$, la gerencia y las auditorías de certificación ISO 50001 pueden declarar con certeza estadística que el ahorro energético es genuino y no producto del azar estocástico.
+        </p>
+      </article>
+
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <div>
+        <strong>industrial-energy-baseline</strong> &mdash; Herramienta de Modelado de Desempeño Energético e Indicadores EnPI.
+        <br>
+        <span style="font-size: 0.75rem;">Diseñado con rigor termomecánico y de procesos bajo normas ISO 50001, ISO 50006 e IPMVP.</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/lorenhey/industrial-energy-baseline" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a>
+        <a href="https://github.com/lorenhey" target="_blank"><i class="fa-solid fa-user-gear"></i> lorenhey</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/energy-data.js"></script>
+  <script src="js/baseline-engine.js"></script>
+  <script src="js/chart-renderer.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
